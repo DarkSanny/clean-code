@@ -55,8 +55,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Md.cs" />
+    <Compile Include="Markdown.cs" />
+    <Compile Include="Markdown_ShouldRender.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="StringBuilderExtension.cs" />
     <Compile Include="Token.cs" />
   </ItemGroup>
   <ItemGroup>
