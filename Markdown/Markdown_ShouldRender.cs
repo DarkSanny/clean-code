@@ -1,4 +1,6 @@
-﻿using FluentAssertions;
+﻿using System;
+using System.Reflection;
+using FluentAssertions;
 using NUnit.Framework;
 
 namespace Markdown
@@ -75,11 +77,13 @@ namespace Markdown
 		}
 
 		private Markdown md;
+		private Type mdType;   
 
 		[SetUp]
 		public void SetUp()
 		{
 			md = new Markdown();
+			mdType = typeof(Markdown);
 		}
 
 		[TestCase("", "", TestName = "ShouldReturnEmpty_WhenEmptyLine")]
@@ -88,40 +92,53 @@ namespace Markdown
 		[TestCase("ab __c__", "ab <strong>c</strong>", TestName = "WithBoldField_ShouldContainsContainerStrong")]
 		[TestCase("ab _c_", "ab <em>c</em>", TestName = "WithItalicField_ShouldContainsContainerEm")]
 		[TestCase("__ab _c___", "<strong>ab <em>c</em></strong>", TestName = "ShouldContainsContainerEmInsideStrong")]
-		[TestCase("_ab __c___", "<em>ab _</em>c___", TestName = "ShouldNotContainsContainerStrongInsideEm")]
-		[TestCase("ab_c_", "ab<em>c</em>", TestName = "Test")]
+		[TestCase("_ab __c___", "<em>ab __c</em>__", TestName = "ShouldNotContainsContainerStrongInsideEm")]
+		[TestCase("ab_c_d", "ab_c_d", TestName = "ShouldNotContainContainerInsideWord")]
+		[TestCase("_ab_c_", "<em>ab_c</em>", TestName = "ShouldNotFinishField_WhenSymbolAfterUnderscore")]
+		[TestCase("_______ab__", "<strong>_____ab</strong>", TestName = "ShouldReturnStrongContainer_WhenEndDoubleUnderscore")]
+		[TestCase("___ab___", "<strong><em>ab</em></strong>", TestName = "ShouldContainEmInsideStrong_WhenTripleUnderscore")]
 		public void RenderToHtml(string original, string expected)
 		{
 			md.RenderToHtml(original).Should().Be(expected);
 		}
 
 		[TestCase("", "_", TestName = "ShouldReturnUnderscore_WhenEmptyLine")]
+		[TestCase(" ", "_ ", TestName = "ShouldReturnLine_WhenFirstSymbolIsWhite")]
+		[TestCase("_", "__", TestName = "ShouldReturnLine_WhenFirstSymbolIsUnderscore")]
 		[TestCase("qwerty_", "<em>qwerty</em>", TestName = "ShouldReturnContainer_WhenCorrectLine")]
 		[TestCase("qwerty _", "_qwerty _", TestName = "ShouldReturnLine_WhenInvalidLine")]
 		[TestCase("\\_", "__", TestName = "WithEscape_ShouldEscape")]
 		[TestCase("a\n", "_a<br>", TestName = "WithSpecialSymbol_ShouldPutTag")]
 		[TestCase("_a", "__", TestName = "ShouldReturnLine_WhenFirstSymbolIsUnderscore")]
 		[TestCase(" a_", "_ ", TestName = "ShouldReturnLine_WhenFirstSymbolIsWhite")]
-		[TestCase("5_", "_5_", TestName = "ShouldReturnline_WhenOnlyDigits")]
+		[TestCase("5_", "_5_", TestName = "ShouldReturnLine_WhenOnlyDigits")]
+		[TestCase("a_a", "_a_a", TestName = "ShouldNotReturnContainer_WhenSymbolAfterClosedUnderscore")]
 		public void ItalicField(string original, string expected)
 		{
-			md.SetMarkdown(original);
+			mdType.GetMethod("SetMarkdown", BindingFlags.NonPublic | BindingFlags.Instance)
+				.Invoke(md, new object[] {original});
 
-			md.GetItalicField().Should().Be(expected);
+			var result = mdType.GetMethod("GetItalicField", BindingFlags.NonPublic | BindingFlags.Instance)
+				.Invoke(md, new object[] {});
+			result.Should().Be(expected);
 		}
 
 		[TestCase("", "__", TestName = "ShouldReturnDoubleUnderscore_WhenEmptyLine")]
 		[TestCase(" ", "__ ", TestName = "ShouldReturnLine_WhenFirstSymbolIsWhite")]
-		[TestCase("__", "____", TestName = "ShouldReturnLineWhen_StartWithDoubleUnderscore")]
+		[TestCase("__", "____", TestName = "ShouldReturnLine_WhenStartWithDoubleUnderscore")]
 		[TestCase("a c", "__a c", TestName = "ShouldReturnLine_WhenNoEndUnderscore")]
 		[TestCase("\\\\ b__", "<strong>\\ b</strong>", TestName = "WithEscaping_ShouldEscape")]
-		[TestCase("a _b_c__", "<strong>a <em>b</em>c</strong>", TestName = "ShouldReturnToken_WhenContainsItalicField")]
-		[TestCase("5__", "__5__", TestName = "ShouldReturnline_WhenOnlyDigits")]
+		[TestCase("a _b_ c__", "<strong>a <em>b</em> c</strong>", TestName = "ShouldContainsContainerEm_WhenContainsItalicField")]
+		[TestCase("5__", "__5__", TestName = "ShouldReturnLine_WhenOnlyDigits")]
+		[TestCase("a_b_c__", "<strong>a_b_c</strong>", TestName = "ShouldNotContainsContainerInsideWord")]
 		public void BoldField(string original, string expected)
 		{
-			md.SetMarkdown(original);
+			mdType.GetMethod("SetMarkdown", BindingFlags.NonPublic | BindingFlags.Instance)
+				.Invoke(md, new object[] { original });
 
-			md.GetBoldField().Should().Be(expected);
+			var result = mdType.GetMethod("GetBoldField", BindingFlags.NonPublic | BindingFlags.Instance)
+				.Invoke(md, new object[] { });
+			result.Should().Be(expected);
 		}
 
 	}
