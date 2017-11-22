@@ -16,10 +16,7 @@ namespace Markdown
 
 		public string RenderToHtml(string markdown)
 		{
-			fsm.SetUp(markdown);
-			while (fsm.Result == null)
-				fsm.Updete();
-			return fsm.Result;
+			return fsm.GetResult(markdown);
 		}
 
 	}
