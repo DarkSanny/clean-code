@@ -9,14 +9,27 @@ namespace Markdown
 	public class Fsm
 	{
 
-		private string result = null;
+		private class State
+		{
+			
+			public Action ActiveState { get; set; }
+			public Stack<StringBuilder> StackFields { get; }
+			public string MarkdownLine { get; }
+			public int Index { get; set; }
+			public char? PreviousSymbol { get; set; }
+			public string Result { get; set; }
 
-		private Action activeState;
-		private Stack<StringBuilder> stackFields;
+			public State(string markdownLine, Action startState)
+			{
+				MarkdownLine = markdownLine;
+				ActiveState = startState;
+				StackFields = new Stack<StringBuilder>();
+				StackFields.Push(new StringBuilder());
+			}
 
-		private string markdown;
-		private int index;
-		private char? previousSymbol;
+		}
+
+		private State currentState;
 
 		private static Dictionary<char, string> specialSymbols = new Dictionary<char, string>()
 		{
@@ -25,87 +38,82 @@ namespace Markdown
 
 		public string GetResult(string markdown)
 		{
-			activeState = AddNextSymbolInSimpleField;
-			this.markdown = markdown;
-			index = 0;
-			previousSymbol = null;
-			stackFields = new Stack<StringBuilder>();
-			stackFields.Push(new StringBuilder());
-			while (result == null)
+			currentState = new State(markdown, AddNextSymbolInSimpleField);
+			while (currentState.Result == null)
 				Update();
-			var tmp = result;
-			result = null;
-			return tmp;
+			return currentState.Result;
 		}
 
 		private void AddNextSymbolInSimpleField()
 		{
 			var isWasEscaped = TryGetNextEscapedSymbol(out var currentSymbol);
 			if (isWasEscaped && currentSymbol != null)
-				stackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
+				currentState.StackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
 			else if (currentSymbol == null)
 			{
-				if (stackFields.Count == 1) result = stackFields.Pop().ToString();
-				else ConcatStackFields(stackFields.Pop().ToString());
+				if (currentState.StackFields.Count == 1)
+					currentState.Result = currentState.StackFields.Pop().ToString();
+				else
+					ConcatStackFields(currentState.StackFields.Pop().ToString());
 			}
 			else if (currentSymbol == '_')
 			{
 				if (IsShouldStartField(2))
 				{
 					SetState(AddNextSymbolInBold);
-					index++;
-					stackFields.Push(new StringBuilder());
+					currentState.Index++;
+					currentState.StackFields.Push(new StringBuilder());
 				}
 				else if (IsShouldStartField(1))
 				{
 					SetState(AddNextSymbolInItalic);
-					stackFields.Push(new StringBuilder());
+					currentState.StackFields.Push(new StringBuilder());
 				}
-				else stackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
+				else currentState.StackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
 			}
-			else stackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
-			previousSymbol = currentSymbol;
+			else currentState.StackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
+			currentState.PreviousSymbol = currentSymbol;
 		}
 
 		private void AddNextSymbolInItalic()
 		{
 			var isWasEscaped = TryGetNextEscapedSymbol(out var currentSymbol);
 			if (isWasEscaped && currentSymbol != null)
-				stackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
+				currentState.StackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
 			else if (currentSymbol == null)
 			{
 				SetState(AddNextSymbolInSimpleField);
-				ConcatStackFields("_" + stackFields.Pop());
+				ConcatStackFields("_" + currentState.StackFields.Pop());
 			}
 			else if (currentSymbol == '_' && IsShouldCloseField(1))
 			{
 				SetState(AddNextSymbolInSimpleField);
-				var currentField = stackFields.Pop();
+				var currentField = currentState.StackFields.Pop();
 				ConcatStackFields(int.TryParse(currentField.ToString(), out var _)
 					? $"_{currentField}_"
 					: currentField.ToHtmlContainer("em"));
 			}
-			else stackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
-			previousSymbol = currentSymbol;
+			else currentState.StackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
+			currentState.PreviousSymbol = currentSymbol;
 		}
 
 		private void AddNextSymbolInBold()
 		{
 			var isWasEscaped = TryGetNextEscapedSymbol(out var currentSymbol);
 			if (isWasEscaped && currentSymbol != null)
-				stackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
+				currentState.StackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
 			else if (currentSymbol == null)
 			{
 				SetState(AddNextSymbolInSimpleField);
-				ConcatStackFields("__" + stackFields.Pop());
+				ConcatStackFields("__" + currentState.StackFields.Pop());
 			}
 			else if (currentSymbol == '_')
 			{
 				if (IsShouldCloseField(2))
 				{
 					SetState(AddNextSymbolInSimpleField);
-					index++;
-					var currentField = stackFields.Pop();
+					currentState.Index++;
+					var currentField = currentState.StackFields.Pop();
 					ConcatStackFields(int.TryParse(currentField.ToString(), out var _)
 						? $"__{currentField}__"
 						: currentField.ToHtmlContainer("strong"));
@@ -113,56 +121,56 @@ namespace Markdown
 				else if (IsShouldStartField(1))
 				{
 					SetState(AddNextSymbolInItalicInsideBold);
-					stackFields.Push(new StringBuilder());
+					currentState.StackFields.Push(new StringBuilder());
 				}
-				else stackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
+				else currentState.StackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
 			}
-			else stackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
-			previousSymbol = currentSymbol;
+			else currentState.StackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
+			currentState.PreviousSymbol = currentSymbol;
 		}
 
 		private void AddNextSymbolInItalicInsideBold()
 		{
 			var isWasEscaped = TryGetNextEscapedSymbol(out var currentSymbol);
 			if (isWasEscaped && currentSymbol != null)
-				stackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
+				currentState.StackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
 			else if (currentSymbol == null)
 			{
 				SetState(AddNextSymbolInBold);
-				ConcatStackFields("_" + stackFields.Pop());
+				ConcatStackFields("_" + currentState.StackFields.Pop());
 			}
 			else if (currentSymbol == '_' && IsShouldCloseField(1))
 			{
 				SetState(AddNextSymbolInBold);
-				var currentField = stackFields.Pop();
+				var currentField = currentState.StackFields.Pop();
 				ConcatStackFields(int.TryParse(currentField.ToString(), out var _)
 					? $"_{currentField}_"
 					: currentField.ToHtmlContainer("em"));
 			}
-			else stackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
-			previousSymbol = currentSymbol;
+			else currentState.StackFields.Peek().Append(TagOrSymbol(currentSymbol.Value));
+			currentState.PreviousSymbol = currentSymbol;
 		}
 
 		private void SetState(Action state)
 		{
-			activeState = state;
+			currentState.ActiveState = state;
 		}
 
 		private void Update()
 		{
-			activeState?.Invoke();
+			currentState.ActiveState?.Invoke();
 		}
 
 		private void ConcatStackFields(string lastField)
 		{
-			stackFields.Peek().Append(lastField);
+			currentState.StackFields.Peek().Append(lastField);
 		}
 
 		private bool IsShouldStartField(int shift)
 		{
-			var previousSymbolIsCorrect = previousSymbol == null
-				|| char.IsWhiteSpace(previousSymbol.Value)
-				|| previousSymbol == '_';
+			var previousSymbolIsCorrect = currentState.PreviousSymbol == null
+				|| char.IsWhiteSpace(currentState.PreviousSymbol.Value)
+				|| currentState.PreviousSymbol == '_';
 			if (previousSymbolIsCorrect)
 			{
 				char? nextSymbol = null;
@@ -179,7 +187,8 @@ namespace Markdown
 
 		private bool IsShouldCloseField(int shift)
 		{
-			var previousSymbolIsCorrect = previousSymbol != null && !char.IsWhiteSpace(previousSymbol.Value);
+			var previousSymbolIsCorrect = currentState.PreviousSymbol != null 
+				&& !char.IsWhiteSpace(currentState.PreviousSymbol.Value);
 			if (previousSymbolIsCorrect)
 			{
 				char? nextSymbol = null;
@@ -197,33 +206,34 @@ namespace Markdown
 		private char? TryLookNextSymbol(int shift)
 		{
 			if (shift <= 0) throw new ArgumentException();
-			var currentIndex = index;
+			var currentIndex = currentState.Index;
 			char? result = null;
 			for (var i = 0; i < shift; i++)
 			{
 				TryGetNextEscapedSymbol(out result);
 			}
-			index = currentIndex;
+			currentState.Index = currentIndex;
 			return result;
 		}
 
 		private bool TryGetNextEscapedSymbol(out char? symbol)
 		{
 			var currentSymbol = TryEscapeSymbol(out symbol);
-			index++;
+			currentState.Index++;
 			return currentSymbol;
 		}
 
 		private bool TryEscapeSymbol(out char? symbol)
 		{
 			symbol = null;
-			if (index >= markdown.Length) return false;
-			if (markdown[index] == '\\' && index + 1 < markdown.Length)
+			if (currentState.Index >= currentState.MarkdownLine.Length) return false;
+			if (currentState.MarkdownLine[currentState.Index] == '\\' 
+				&& currentState.Index + 1 < currentState.MarkdownLine.Length)
 			{
-				symbol = markdown[++index];
+				symbol = currentState.MarkdownLine[++currentState.Index];
 				return true;
 			}
-			symbol = markdown[index];
+			symbol = currentState.MarkdownLine[currentState.Index];
 			return false;
 		}
 
